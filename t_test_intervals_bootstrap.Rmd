@@ -1,0 +1,186 @@
+---
+title: "Data analysis: t-test, confidence intervals, bootstrap"
+author: "Weronika Pyrka"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+
+
+# TASK 1
+
+Company A produces mobile phones. The packaging of the new model S from company A states that the battery lasts an average of 48 hours. We did not trust company A's claim and left 42 different model S phones playing videos until they discharged. The data collected during this experiment is available in the file *zad2.csv*. Justify that you can use the t-test and use the t-test to verify if company A is not deceiving consumers.
+
+Before starting the task, the data from the file is loaded.
+
+```{r}
+battery <- read.csv("zad2.csv")
+battery
+```
+The first step before performing the t-test is to check if it can be conducted in this case.
+
+To do this, check if the sample comes from a normal distribution.
+
+To accomplish this, draw a histogram of the sample.
+
+```{r}
+plot1 <- ggplot(data = battery, aes(x = durability)) + 
+          geom_histogram(bins=10, fill = "orchid3", color = "orchid3") + 
+          ggtitle("Battery") + xlab('Durability') + ylab('Frequency')
+plot1
+```
+
+Looking at the plot, I can conclude that it might be a sample from a normal distribution or a similar distribution to the normal one.
+
+To confirm this statement, I perform the Shapiro-Wilk test.
+
+```{r}
+shapiro.test(battery$durability)
+```
+Check the p-value. Since it is greater than 0.05, it confirms the conclusion drawn after plotting the histogram, that the sample has a distribution similar to the normal distribution.
+
+Therefore, conducting the t-test is valid.
+
+It can proceeded directly to using the t-test.
+
+```{r}
+t.test(battery$durability, mu = 48)
+```
+Again, I focus on the p-value. The obtained value allows to conclude that the battery durability stated on the phone's box differs from the actual durability.
+
+Additionally, from the conducted test, I can infer that with 95% confidence, the mean battery durability of the phone will be 52.29 hours and more precisely, it will lie within the interval (51.45556;53.13110).
+
+Ultimately, I can assert that Company A is deceiving consumers, but in favor of the customer, as the actual average phone runtime is longer than that stated by the manufacturer on the packaging.
+
+
+
+# TASK 2
+
+Company B produces chocolate. After years, the management has decided to change the packaging of their chocolate, which they believe will certainly increase sales. The file *zad3t.csv* contains data on the sales of chocolate with the new packaging in one of the stores in one of the large Polish cities, as well as data on the sales of chocolate with the old packaging in one of the stores in one of the large Polish cities. Using the Student's t-test, check if the management was correct and if the new packaging increased sales.
+
+Before starting the task, the data from the file is loaded.
+
+```{r}
+packaging <- read.csv("zad3t.csv")
+packaging
+```
+
+Next, a histogram of the sales is created.
+
+```{r}
+plot2 <- ggplot(packaging, aes(x = sold)) + 
+           geom_histogram(bins = 10, fill = "coral", color = "coral") + 
+           ggtitle("Sales") + xlab("Sales") + ylab("Number") + facet_wrap(~pack, scales = 'free')
+plot2
+```
+
+From the obtained plots, I can conclude that the distribution is similar to a normal distribution.
+
+Next, I rearrange the data to separate the new packaging from the old packaging. This will increase the clarity of the results obtained.
+
+```{r}
+packaging <- packaging %>% 
+  group_by(pack) %>% 
+  mutate(row = row_number()) %>% 
+  pivot_wider(names_from = pack, values_from = sold) %>% 
+  select(new_pack, old_pack)
+
+packaging
+```
+
+Perform the Shapiro-Wilk test to confirm whether the data originates from a normal distribution.
+
+```{r}
+shapiro.test(packaging$old_pack)
+```
+
+```{r}
+shapiro.test(packaging$new_pack)
+```
+
+Based on the analysis of the p-value, I confirm the assumption that the sample comes from a distribution similar to the normal distribution.
+
+Next, I calculate the variances of both packaging types.
+
+```{r}
+var(packaging$old_pack)
+var(packaging$new_pack)
+```
+
+Both variances are approximately the same, so proceed to perform the t-test.
+
+```{r}
+t.test(packaging$new_pack, packaging$old_pack, var.equal = TRUE)
+```
+
+Here again, I pay attention to the p-value. The obtained value is less than 0.05, indicating that the statement that the sales of both packaging types are the same is untrue. With a 95% confidence level, it can be said that the difference between the means lies within the interval (10.58240;34.51438). The "mean of x" element represents the sales of the new packaging, while "mean of y" represents the sales of the old packaging. Comparing these values, I conclude that the management was correct and the change to the new packaging increased chocolate sales.
+
+
+
+# TASK 3
+
+Use the bootstrap method to perform the above tests and compare the results.
+
+Task 1: 
+
+```{r}
+n <- length(battery$durability)
+mu <- 48
+bootstrap_stat <- rep(0, 5000)
+
+for (i in 1:5000) {
+  sample_data <- sample(battery$durability, size = n, replace = TRUE)
+  bootstrap_stat[i] <- mean(sample_data) - mu
+}
+
+bootstrap_stat <- tibble(mean_diff = bootstrap_stat)
+
+plot_1 <- ggplot(bootstrap_stat, aes(x = mean_diff)) + 
+           geom_histogram(binwidth = 0.25, fill = "rosybrown1") + 
+           xlab("Mean difference") + ylab("Count") + 
+           geom_vline(xintercept = c(quantile(bootstrap_stat$mean_diff, 0.025), 
+                                      quantile(bootstrap_stat$mean_diff, 0.975)),
+                      linetype = 'dashed', lwd = 0.8, color = 'violetred')
+plot_1
+```
+
+
+```{r}
+interval <-  c(quantile(bootstrap_stat$mean_diff, 0.025), quantile(bootstrap_stat$mean_diff, 0.975))
+interval
+```
+
+Analyzing the information obtained from the bootstrap method, I arrived at conclusions consistent with those drawn from performing the t-test. Specifically: the battery life of the phone differs from what is stated on the packaging; the manufacturers from company A are misleading consumers and the durability of the battery is better than indicated. The confidence intervals from the bootstrap method and the t-test are almost identical. The conclusions I draw from the bootstrap method are the same as those from the t-test.
+
+
+
+Task 2: 
+
+```{r}
+n = length(packaging$old_pack)
+bootstrap_stat = rep(0,5000)
+for(i in 1:5000){
+  sample_1 = sample(packaging$new_pack, size=n, replace=TRUE)
+  sample_2 = sample(packaging$old_pack, size=n, replace=TRUE)
+  bootstrap_stat[i] = mean(sample_1) - mean(sample_2)
+}
+bootstrap_stat = tibble(mean_diff = bootstrap_stat)
+
+confidence_interval <- c(quantile(bootstrap_stat$mean_diff, 0.025,), quantile(bootstrap_stat$mean_diff, 0.975))
+confidence_interval
+```
+
+```{r}
+plot_2 <- ggplot(bootstrap_stat, aes(x = mean_diff)) + 
+           geom_histogram(binwidth = 0.25, fill = "lightskyblue1") + 
+           xlab("Mean difference") + ylab("Count") + 
+           geom_vline(xintercept = c(quantile(bootstrap_stat$mean_diff, 0.025,),
+           quantile(bootstrap_stat$mean_diff, 0.975)), linetype = 'dashed', lwd = 0.8, color = 'navy')
+plot_2
+```
+
+The conclusions drawn from the implementation of the bootstrap method for Task 2 are the same as those from the bootstrap method for Task 1. The parameters of the bootstrap method align with those obtained from the t-test and the confidence intervals are nearly identical. The new packaging achieved better sales, confirming that the management was correct in expecting an increase in sales due to the packaging change.
+
