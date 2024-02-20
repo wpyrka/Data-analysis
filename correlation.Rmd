@@ -1,0 +1,110 @@
+---
+title: "Data analysis - correlation"
+author: "Weronika Pyrka"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r}
+library(tidyverse)
+library(boot)
+```
+
+
+# TASK
+
+In the file *sp3.csv*, there are data concerning the quantity of tweets written by the CEO of a certain company each day and the opening price of the company's stock on that day. Does the opening price influence the quantity of tweets? If so, to what extent? Check the statistical significance of the correlation coefficient at a significance level of $\alpha=0.05$ using a parametric method. Determine the confidence interval using the bootstrap method and perform a permutation test. Compare the obtained results.
+
+
+Let's start by reading the data from the file.
+
+```{r}
+data <- read.csv("sp3.csv")
+data
+```
+
+The first step before performing the t-test is to check if it can be conducted in this case.
+
+To do this, I check if the sample comes from a normal distribution.
+
+To accomplish this, I draw a histogram of the sample.
+
+```{r}
+ggplot(data, aes(x = Tweets)) +
+  geom_histogram(binwidth = 2, fill = "palevioletred", color = "deeppink3") +
+  labs(x = "Number of tweets", y = "Frequency", title = "Distribution of number of tweets")
+```
+
+Looking at the plot, I can conclude that it might be a sample from a normal distribution or a similar distribution to the normal one.
+
+To confirm this statement, I perform the Shapiro-Wilk test.
+
+```{r}
+shapiro_test <- shapiro.test(data$Tweets)
+print(paste("The p-value for the Shapiro-Wilk test for the quantity of tweets:", shapiro_test$p.value))
+```
+
+Check the p-value. Since it is greater than 0.05, it confirms the conclusion drawn after plotting the histogram, that the sample has a distribution similar to the normal distribution.
+
+Therefore, conducting the t-test is valid.
+
+It can proceeded directly to using the t-test.
+
+```{r}
+t.test(data$Tweets, var.equal = TRUE)
+```
+
+```{r}
+alpha <- 0.05
+correlation <- cor(data$Tweets, data$Open)
+print(paste("The correlation between the quantity of tweets and the opening price:", correlation))
+```
+
+The correlation between the quantity of tweets and the opening price is 0.717025159114455. This indicates a moderate positive relationship between these two variables. It suggests that there is a tendency for the opening price of the stock to increase when the quantity of tweets increase and to decrease when the quantity of tweets decrease.
+
+```{r}
+alpha <- 0.05
+correlation <- cor.test(data$Tweets, data$Open)
+
+if(correlation$p.value < alpha) {
+  print("The correlation coefficient is statistically significant.")
+} else {
+  print("There is no statistical significance in the correlation coefficient.")
+}
+```
+
+```{r}
+bootstrap <- function(data, indices) {
+  sample_data <- data[indices, ]
+  return(cor(sample_data$Tweets, sample_data$Open))
+}
+
+set.seed(123)
+bootstrap_results <- boot(data, bootstrap, R = 1000)
+bootstrap_interval <- boot.ci(bootstrap_results, type = "bca")$bca[, 4:5]
+
+cat("Bootstrap confidence interval:", bootstrap_interval)
+```
+
+The bootstrap confidence interval for the correlation coefficient is from 0.429 to 0.858. This means that we can be confident at a 95% confidence level that the true value of the correlation coefficient is within this interval.
+
+This value confirms the statistical significance of the correlation coefficient.
+
+```{r}
+permutation_test <- function(data, indices) {
+  permuted_data <- data
+  permuted_data$Tweets <- data$Tweets[indices]
+  return(cor(permuted_data$Tweets, permuted_data$Open))
+}
+
+permutation_results <- replicate(1000, permutation_test(data, sample(nrow(data))))
+permutation_p_value <- mean(permutation_results >= correlation$estimate)
+
+cat("Result of the permutation test:", permutation_p_value)
+```
+The t-test, bootstrap method and permutation test all confirm the statistical significance of the positive association between the quantity of tweets and the opening price of the stock.
+
+It is worth noting that the results of different tests are consistent, which adds confidence to the interpretation of the relationship between the variables.
+
+The correlation coefficient value 0.717 suggests a moderate positive relationship between the quantity of tweets and the opening price of the stock, which may be significant from the perspective of financial market analysis.
